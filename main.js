@@ -1,35 +1,62 @@
-import { SceneManager } from './src/modules/scene.js';
-import { Room } from './src/modules/room.js';
-import { Character } from './src/modules/character.js';
-import { Furniture } from './src/modules/furniture.js';
-import { PhysicsManager } from './src/modules/physics.js';
+// main.js
+import * as THREE from 'three';
+import { createScene, createRenderer, createCamera } from "./sceneManager.js";
+import { initPhysics, updatePhysics } from "./physicsEngine.js";
+import { createLights } from "./lightManager.js";
+import { createRandomMap } from "./randomMap.js";
+import { createPlayer, playerMesh, updatePlayer } from "./player.js";
 
-async function init() {
-    // Initialize scene manager
-    const sceneManager = new SceneManager();
+// THREE is already loaded globally via <script src="three.js">
+// Alternatively, you could import it from 'three' if you use a bundler.
 
-    // Initialize physics manager
-    const physicsManager = new PhysicsManager();
-    await physicsManager.init(); // Wait for physics to initialize
+let scene, camera, renderer;
+let clock = new THREE.Clock();
 
-    // Initialize room
-    const room = new Room(sceneManager.getScene(), physicsManager);
+// Wait for Ammo to load (WASM)
+Ammo().then(() => {
+  init();  // Once Ammo is ready, init everything
+  animate();
+});
 
-    // Initialize character
-    const character = new Character(sceneManager.getScene(), sceneManager.getCamera(), physicsManager);
+function init() {
+  // Create scene, camera, renderer
+  scene = createScene();
+  camera = createCamera();
+  renderer = createRenderer();
+  document.body.appendChild(renderer.domElement);
 
-    // Initialize furniture
-    const furniture = new Furniture(sceneManager.getScene(), physicsManager);
+  // Initialize physics world
+  initPhysics();
 
-    // Animation loop
-    function animate() {
-        requestAnimationFrame(animate);
-        physicsManager.update();
-        character.update();
-        sceneManager.render();
-    }
+  // Add lights
+  createLights(scene);
 
-    animate();
+  // Create random map
+  createRandomMap(scene);
+
+  // Create player
+  createPlayer(scene);
 }
 
-init().catch(console.error); 
+function animate() {
+  requestAnimationFrame(animate);
+
+  const deltaTime = clock.getDelta();
+  updatePhysics(deltaTime);
+
+  // Update player movement
+  updatePlayer();
+
+  // Simple third-person camera logic (look at the player)
+  if (playerMesh) {
+    const desiredPosition = new THREE.Vector3(
+      playerMesh.position.x,
+      playerMesh.position.y + 5,
+      playerMesh.position.z + 10
+    );
+    camera.position.lerp(desiredPosition, 0.1);  // smooth interpolation
+    camera.lookAt(playerMesh.position);
+  }
+
+  renderer.render(scene, camera);
+}
